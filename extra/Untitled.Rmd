@@ -1,0 +1,200 @@
+---
+title: "power_analysis"
+output: html_document
+date: "2023-06-16"
+---
+
+
+```{r setup echo=FALSE}
+
+library(tidyverse) #A helpful collection of R packages designed for data science.
+library(MASS) #To create correlated variables 
+library(broom) #To more easily extract information from R outputs
+library(lme4) #For mixed-effect models
+library(lmerTest) #To obtain pvalues in mixed effect models
+
+
+```
+
+
+```{r}
+
+#Sample size
+n_per_group <- 50
+
+pop_es <- seq(from = 0, to = 0.8, length.out = 30) #creates sequences of numbers. 
+
+#Container power
+powerValue <- NULL
+
+for(es in pop_es){
+  
+#Container pvalues
+pvalues <- NULL
+
+  for(i in 1:1000){
+    
+    group1 <- rnorm(n = n_per_group, mean = 0, sd = 1)
+    group2 <- rnorm(n = n_per_group, mean = es, sd = 1)
+    
+    score <- c(group1, group2)
+    groupID <- rep(c("gr1", "gr2"), each = n_per_group)
+    
+    MyData <- data.frame(groupID, score)
+    t_model <- t.test(score ~ groupID, data = MyData)
+    pvalues <- c(pvalues, tidy(t_model)$p.value[1])
+  
+  }
+
+  #Power
+  powerValue <- c(powerValue, sum(pvalues <= 0.05)/length(pvalues))
+
+}
+
+MyDataPower <- data.frame(pop_es, powerValue)
+
+#Plot
+ggplot(MyDataPower, aes(x=pop_es, y=powerValue)) + 
+  geom_line() +
+  xlab("Effect Sizes")+
+  ylab("Power")+
+  theme_bw() +
+  geom_hline(yintercept= 0.8, linetype="dashed", color = "red") +
+  ggtitle("Power Curve for an Independent Sample t-test (n per group: 50)")
+
+```
+
+
+```{r}
+
+#Sample size
+n_per_group <- seq(from = 10, to = 100, length.out = 6) #creates sequences of numbers.
+# n_per_group <- 10
+
+pop_es <- seq(from = 0, to = 0.8, length.out = 9) #creates sequences of numbers.
+# pop_es = 0
+
+#Container power
+
+overall_power = NULL
+overall_N = NULL
+overall_es = NULL
+overall_min = NULL
+overall_max = NULL
+overall_sd = NULL
+
+overall_p.05 = NULL
+overall_p.01 = NULL
+overall_p.001 = NULL
+
+
+
+
+for(N in n_per_group) {
+  
+  powerValue <- NULL
+  nValue <- NULL
+  maxp <- NULL
+  minp <- NULL
+  pSD = NULL
+  mean_p.05 = NULL
+  mean_p.01 = NULL
+  mean_p.001 = NULL
+  print(N)
+  
+  for(es in pop_es){
+    
+    #Container pvalues
+    pvalues <- NULL
+    
+    p.05 = NULL
+    p.01 = NULL
+    p.001 = NULL
+    
+  
+  
+    for(i in 1:1){
+    
+      for(i in 1:100){
+        
+        group1 <- rnorm(n = N, mean = 0, sd = 1)
+        group2 <- rnorm(n = N, mean = es, sd = 1)
+        
+        score <- c(group1, group2)
+        groupID <- rep(c("gr1", "gr2"), each = N)
+        
+        MyData <- data.frame(groupID, score)
+        t_model <- t.test(score ~ groupID, data = MyData)
+        pvalues <- c(pvalues, tidy(t_model)$p.value[1])
+        
+        
+        # if (tidy(t_model)$p.value[1] <= 0.05){
+        if (TRUE){
+          if(tidy(t_model)$p.value[1] <= 0.001) {
+              p.05 = c(p.05, 0)
+              p.01 = c(p.01, 0)
+              p.001 = c(p.001, 1)
+          } else if (tidy(t_model)$p.value[1] <= 0.01) {
+              p.05 = c(p.05, 0)
+              p.01 = c(p.01, 1)
+              p.001 = c(p.001, 0)
+          } else if (tidy(t_model)$p.value[1] <= 0.05) {
+              p.05 = c(p.05, 1)
+              p.01 = c(p.01, 0)
+              p.001 = c(p.001, 0)
+          } else {
+            p.05 = c(p.05, 0)
+            p.01 = c(p.01, 0)
+            p.001 = c(p.001, 0)
+          }
+        }
+      
+      }
+    }
+    
+      #Power
+      powerValue <- c(powerValue, mean(pvalues))
+      nValue <- c(nValue, N)
+      maxp <- c(maxp, max(pvalues))
+      minp <- c(minp, min(pvalues))
+      pSD = c(pSD, sd(pvalues))
+      mean_p.05 = c(mean_p.05, mean(p.05))
+      mean_p.01 = c(mean_p.01, mean(p.01))
+      mean_p.001 = c(mean_p.001, mean(p.001))
+
+  }
+  
+overall_power = c(overall_power, powerValue)
+overall_N = c(overall_N, nValue)
+overall_es = c(overall_es, pop_es)
+overall_min = c(overall_min, minp)
+overall_max = c(overall_max, maxp)
+overall_sd = c(overall_sd, pSD)
+
+overall_p.05 = c(overall_p.05, mean_p.05)
+overall_p.01 = c(overall_p.01, mean_p.01)
+overall_p.001 = c(overall_p.001, mean_p.001)
+
+
+  
+
+}
+
+MyDataPower <- data.frame(overall_es, overall_power, overall_N, overall_min, overall_max, overall_sd, overall_p.05, overall_p.01, overall_p.001)
+
+MyDataPower = MyDataPower %>% group_by(overall_N)
+
+#Plot
+ggplot(MyDataPower, aes(x=overall_es, y=overall_power, color = as.factor(overall_N))) + 
+  geom_line() +
+  # geom_errorbar(aes(ymin=overall_min, ymax=overall_max)) +
+  # geom_errorbar(aes(ymin=overall_power-(overall_sd*1), ymax=overall_power+(overall_sd*1))) +
+  # facet_wrap(~ as.factor(overall_N)) + theme(legend.position = "none") +
+  xlab("Effect size")+
+  ylab("Mean p value")+
+  theme_bw() +
+  geom_hline(yintercept= 0.05, linetype="dashed", color = "red") +
+  ggtitle("Significance for differencnt sample sizes vs effect sizes over 100 sims")
+
+
+```
